@@ -3,6 +3,7 @@ name: Build APK
 on:
   push:
     branches: [ master ]
+    tags: [ 'v*' ]
     paths:
       - 'APK/**'
   pull_request:
