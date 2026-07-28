@@ -27,15 +27,42 @@ public class WebAppInterface {
     private String cachedToken = null;
     private long tokenExpiry = 0;
 
+    private VideoDetectionListener videoDetectionListener;
+
+    public interface VideoDetectionListener {
+        void onVideoDetected(String videoId);
+        void onVideoLost();
+    }
+
     public WebAppInterface(Context context, Activity activity) {
         this.context = context;
         this.activity = activity;
+    }
+
+    public void setVideoDetectionListener(VideoDetectionListener listener) {
+        this.videoDetectionListener = listener;
     }
 
     @JavascriptInterface
     public boolean isHdOnly() {
         SharedPreferences prefs = context.getSharedPreferences("redgifs_prefs", 0);
         return prefs.getBoolean("hd_only", true);
+    }
+
+    @JavascriptInterface
+    public void onVideoDetected(String videoId) {
+        if (videoId == null || videoId.isEmpty()) return;
+        Log.d(TAG, "Video detected: " + videoId);
+        if (videoDetectionListener != null) {
+            activity.runOnUiThread(() -> videoDetectionListener.onVideoDetected(videoId));
+        }
+    }
+
+    @JavascriptInterface
+    public void onVideoLost() {
+        if (videoDetectionListener != null) {
+            activity.runOnUiThread(() -> videoDetectionListener.onVideoLost());
+        }
     }
 
     @JavascriptInterface
@@ -84,7 +111,6 @@ public class WebAppInterface {
     }
 
     private String getDirectVideoUrl(String videoId, boolean hdOnly) {
-        // Strategy 1: Redgifs API v2
         try {
             String token = getToken();
             if (token != null) {
@@ -119,7 +145,6 @@ public class WebAppInterface {
             Log.e(TAG, "API v2 failed: " + e.getMessage());
         }
 
-        // Strategy 2: HLS m3u8 manifest
         try {
             String m3u8Url = "https://api.redgifs.com/v2/gifs/" + videoId + "/hd.m3u8";
             String manifest = fetchUrl(m3u8Url);
@@ -131,7 +156,6 @@ public class WebAppInterface {
             Log.e(TAG, "m3u8 failed: " + e.getMessage());
         }
 
-        // Strategy 3: Direct m4s URL (last resort)
         try {
             String capitalized = videoId.substring(0, 1).toUpperCase() + videoId.substring(1);
             return "https://media.redgifs.com/" + capitalized + ".m4s";

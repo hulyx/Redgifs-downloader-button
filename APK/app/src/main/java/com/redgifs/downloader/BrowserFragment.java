@@ -27,6 +27,7 @@ public class BrowserFragment extends Fragment {
 
     private WebView webView;
     private ProgressBar progressBar;
+    private WebAppInterface webAppInterface;
     private static final String REDGIFS_URL = "https://www.redgifs.com";
 
     @Nullable
@@ -45,6 +46,13 @@ public class BrowserFragment extends Fragment {
         progressBar = view.findViewById(R.id.progress_bar);
 
         setupWebView();
+
+        webAppInterface = new WebAppInterface(requireContext(), requireActivity());
+        webView.addJavascriptInterface(webAppInterface, "Android");
+
+        if (getActivity() instanceof MainActivity) {
+            webAppInterface.setVideoDetectionListener((MainActivity) getActivity());
+        }
 
         DownloadService.setSharedWebView(webView);
 
@@ -98,11 +106,6 @@ public class BrowserFragment extends Fragment {
                 return false;
             }
         });
-
-        webView.addJavascriptInterface(
-                new WebAppInterface(requireContext(), requireActivity()),
-                "Android"
-        );
     }
 
     private void injectDownloadScript() {

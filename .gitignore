@@ -3,12 +3,18 @@
 *.aab
 *.dex
 *.class
+*.idsig
 build/
 .gradle/
 local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Signing
+*.keystore
+*.b64
+keystore.*
 
 # OS
 .DS_Store
