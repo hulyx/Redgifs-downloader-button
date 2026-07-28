@@ -25,7 +25,7 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements WebAppInterface.VideoDetectionListener {
 
     private BottomNavigationView bottomNav;
     private View downloadButtonContainer;
@@ -114,6 +114,7 @@ public class MainActivity extends AppCompatActivity {
         checkPermissions();
     }
 
+    @Override
     public void onVideoDetected(String videoId) {
         detectedVideoId = videoId;
         downloadButtonContainer.setVisibility(View.VISIBLE);
@@ -130,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
     public void onVideoLost() {
         detectedVideoId = null;
         if (pulseAnimator != null && pulseAnimator.isRunning()) {
