@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Redgifs Downloader</string>
+    <string name="nav_browser">Browser</string>
+    <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
+    <string name="download_history">Download History</string>
+    <string name="no_downloads">No downloads yet.\nBrowse Redgifs and tap the download button.</string>
+    <string name="clear_all">Clear All</string>
+    <string name="clear_history">Clear History</string>
+    <string name="clear_history_confirm">Are you sure you want to clear all download history?</string>
+    <string name="delete">Delete</string>
+    <string name="delete_confirm">Remove this item from history?</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="play">Play</string>
+    <string name="cannot_play">Cannot play this video</string>
+    <string name="settings">Settings</string>
+    <string name="hd_only">HD Only Downloads</string>
+    <string name="auto_inject_buttons">Auto-inject Download Buttons</string>
+    <string name="downloading">Downloading…</string>
+    <string name="downloads_active">downloads active</string>
+    <string name="notification_channel_name">Downloads</string>
+    <string name="notification_channel_description">Redgifs video download progress</string>
+    <string name="permission_storage_message">Storage permission is needed to save videos.</string>
+    <string name="permission_granted">Permission granted</string>
+    <string name="permission_required">Storage permission is required to download videos.</string>
+    <string name="download_started">Download started</string>
+    <string name="download_complete">Download complete</string>
+    <string name="download_failed">Download failed</string>
+</resources>

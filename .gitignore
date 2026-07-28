@@ -1,0 +1,22 @@
+# Build outputs
+*.apk
+*.aab
+*.dex
+*.class
+build/
+.gradle/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
+
+# Generated
+*.log

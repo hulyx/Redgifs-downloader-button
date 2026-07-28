@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Redgifs Downloader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 320px;
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #121212;
+            color: #e0e0e0;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .header h2 {
+            color: #ff5252;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .version {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 4px;
+        }
+
+        .info {
+            text-align: center;
+            padding: 14px 16px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 12px;
+        }
+
+        .links {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .links a {
+            flex: 1;
+            display: block;
+            text-align: center;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .links a.github {
+            color: #90caf9;
+            background: rgba(33, 150, 243, 0.1);
+            border: 1px solid rgba(33, 150, 243, 0.2);
+        }
+
+        .links a.github:hover {
+            background: rgba(33, 150, 243, 0.2);
+            border-color: rgba(33, 150, 243, 0.35);
+        }
+
+        .links a.issues {
+            color: rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .links a.issues:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .donate-section {
+            text-align: center;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+        }
+
+        .donate-section p {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.45);
+            margin-bottom: 8px;
+        }
+
+        .donate-links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .donate-links a {
+            flex: 1;
+            display: block;
+            text-align: center;
+            padding: 7px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.2s, border-color 0.2s, transform 0.15s;
+        }
+
+        .donate-links a:hover {
+            transform: scale(1.03);
+        }
+
+        .donate-links a.kofi {
+            color: #ff5e5b;
+            background: rgba(255, 94, 91, 0.1);
+            border: 1px solid rgba(255, 94, 91, 0.25);
+        }
+
+        .donate-links a.kofi:hover {
+            background: rgba(255, 94, 91, 0.2);
+            border-color: rgba(255, 94, 91, 0.4);
+        }
+
+        .donate-links a.liberapay {
+            color: #f6c915;
+            background: rgba(246, 201, 21, 0.08);
+            border: 1px solid rgba(246, 201, 21, 0.2);
+        }
+
+        .donate-links a.liberapay:hover {
+            background: rgba(246, 201, 21, 0.15);
+            border-color: rgba(246, 201, 21, 0.35);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>⬇️ Redgifs Downloader</h2>
+        <div class="version">v1.1</div>
+    </div>
+    <div class="info">
+        Click the download button on any<br>Redgifs video to save it in HD.
+    </div>
+    <div class="links">
+        <a class="github" href="https://github.com/freerebirth/Redgifs-download-button" target="_blank">GitHub</a>
+        <a class="issues" href="https://github.com/freerebirth/Redgifs-download-button/issues" target="_blank">Report Bug</a>
+    </div>
+    <div class="donate-section">
+        <p>Support the development ❤️</p>
+        <div class="donate-links">
+            <a class="kofi" href="https://ko-fi.com/freerebirth" target="_blank">☕ Ko-fi</a>
+            <a class="liberapay" href="https://liberapay.com/freerebirth" target="_blank">🎁 Liberapay</a>
+        </div>
+    </div>
+</body>
+</html>
