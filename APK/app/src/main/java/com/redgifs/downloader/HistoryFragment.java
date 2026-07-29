@@ -19,6 +19,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.button.MaterialButton;
 import com.redgifs.downloader.adapter.HistoryAdapter;
@@ -36,6 +37,7 @@ public class HistoryFragment extends Fragment implements HistoryAdapter.OnItemAc
     private HistoryAdapter adapter;
     private TextView emptyView;
     private MaterialButton clearAllBtn;
+    private SwipeRefreshLayout swipeRefresh;
     private DownloadDatabase db;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -55,10 +57,14 @@ public class HistoryFragment extends Fragment implements HistoryAdapter.OnItemAc
         recyclerView = view.findViewById(R.id.recycler_history);
         emptyView = view.findViewById(R.id.empty_view);
         clearAllBtn = view.findViewById(R.id.btn_clear_all);
+        swipeRefresh = view.findViewById(R.id.swipe_refresh);
 
         adapter = new HistoryAdapter(new ArrayList<>(), this);
         recyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
         recyclerView.setAdapter(adapter);
+
+        swipeRefresh.setOnRefreshListener(this::loadHistory);
+        swipeRefresh.setColorSchemeColors(0xFFFF5252);
 
         clearAllBtn.setOnClickListener(v -> {
             new AlertDialog.Builder(requireContext())
@@ -95,6 +101,7 @@ public class HistoryFragment extends Fragment implements HistoryAdapter.OnItemAc
                 getActivity().runOnUiThread(() -> {
                     adapter.setItems(items);
                     updateEmptyView();
+                    swipeRefresh.setRefreshing(false);
                 });
             }
         });

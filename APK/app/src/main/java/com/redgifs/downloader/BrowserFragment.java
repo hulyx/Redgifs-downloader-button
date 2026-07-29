@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -22,6 +23,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class BrowserFragment extends Fragment {
 
@@ -88,7 +91,7 @@ public class BrowserFragment extends Fragment {
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setUserAgentString(settings.getUserAgentString()
-                .replace("wv", "") + " RedgifsDownloader/1.7");
+                .replace("wv", "") + " RedgifsDownloader/1.9");
 
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
@@ -118,6 +121,21 @@ public class BrowserFragment extends Fragment {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return false;
             }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                String id = extractVideoIdFromUrl(url);
+                if (id != null && !id.isEmpty()) {
+                    String finalId = id;
+                    view.post(() -> {
+                        if (getActivity() instanceof MainActivity) {
+                            ((MainActivity) getActivity()).onVideoDetected(finalId);
+                        }
+                    });
+                }
+                return null;
+            }
         });
     }
 
@@ -138,6 +156,27 @@ public class BrowserFragment extends Fragment {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private String extractVideoIdFromUrl(String url) {
+        // media.redgifs.com/VIDEOID.hd.mp4 or .sd.mp4
+        Matcher m = Pattern.compile("/([A-Za-z][A-Za-z0-9]{5,})\\.(?:hd|sd|mobile)\\.(?:mp4|m4s)").matcher(url);
+        if (m.find()) return m.group(1);
+
+        // media.redgifs.com/VIDEOID.mp4 or .m4s
+        m = Pattern.compile("/([A-Za-z][A-Za-z0-9]{5,})\\.(?:mp4|m4s)").matcher(url);
+        if (m.find()) return m.group(1);
+
+        // api.redgifs.com/v2/gifs/VIDEOID (not search/trending/tags)
+        m = Pattern.compile("/v2/gifs/([A-Za-z][A-Za-z0-9]{5,})").matcher(url);
+        if (m.find()) {
+            String id = m.group(1);
+            if (!id.equals("search") && !id.equals("trending") && !id.equals("tags")) {
+                return id;
+            }
+        }
+
+        return null;
     }
 
     public boolean canGoBack() {
