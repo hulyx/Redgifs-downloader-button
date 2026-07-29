@@ -1,10 +1,14 @@
 package com.redgifs.downloader.adapter;
 
+import android.content.ContentUris;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -72,13 +76,14 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
         holder.details.setText(item.getFormattedDate() + " · " + item.getFormattedSize());
 
         holder.thumbnail.setImageBitmap(null);
+        holder.thumbnail.setBackgroundColor(0xFF1E1E1E);
         holder.playOverlay.setVisibility(View.VISIBLE);
 
         String cacheKey = item.getFilename();
         if (thumbnailCache.containsKey(cacheKey)) {
             holder.thumbnail.setImageBitmap(thumbnailCache.get(cacheKey));
             holder.playOverlay.setVisibility(View.VISIBLE);
-        } else if (item.getLocalFilePath() != null && !item.getLocalFilePath().isEmpty()) {
+        } else if (item.getFilename() != null && !item.getFilename().isEmpty()) {
             loadThumbnail(holder, item, cacheKey);
         }
 
@@ -92,20 +97,18 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
     }
 
     private void loadThumbnail(ViewHolder holder, DownloadItem item, String cacheKey) {
-        String path = item.getLocalFilePath();
-        if (path == null) return;
+        String filename = item.getFilename();
+        if (filename == null) return;
 
         thumbExecutor.execute(() -> {
             Bitmap thumb = null;
             MediaMetadataRetriever mmr = new MediaMetadataRetriever();
             try {
-                if (path.startsWith("/") || path.startsWith("file://")) {
-                    String filePath = path.startsWith("file://") ? Uri.parse(path).getPath() : path;
-                    mmr.setDataSource(filePath);
-                } else {
-                    mmr.setDataSource(holder.itemView.getContext(), Uri.parse(path));
+                Uri mediaUri = queryMediaStoreUri(holder.itemView.getContext(), filename);
+                if (mediaUri != null) {
+                    mmr.setDataSource(holder.itemView.getContext(), mediaUri);
+                    thumb = mmr.getFrameAtTime(500_000);
                 }
-                thumb = mmr.getFrameAtTime(1_000_000);
             } catch (Exception e) {
                 // thumbnail extraction failed
             } finally {
@@ -127,6 +130,39 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
                 }
             });
         });
+    }
+
+    private Uri queryMediaStoreUri(android.content.Context context, String filename) {
+        String[] projection = {MediaStore.Downloads._ID};
+        String selection = MediaStore.Downloads.DISPLAY_NAME + " = ?";
+        String[] selectionArgs = {filename};
+        String relativePath = Environment.DIRECTORY_DOWNLOADS + "/Redgifs/";
+
+        try (Cursor cursor = context.getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                projection,
+                selection + " AND " + MediaStore.Downloads.RELATIVE_PATH + " = ?",
+                new String[]{filename, relativePath},
+                null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
+                return ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id);
+            }
+        } catch (Exception ignored) {}
+
+        try (Cursor cursor = context.getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
+                return ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id);
+            }
+        } catch (Exception ignored) {}
+
+        return null;
     }
 
     @Override

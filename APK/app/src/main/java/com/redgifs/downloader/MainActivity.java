@@ -4,7 +4,6 @@ import android.animation.ObjectAnimator;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,7 +13,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
 import android.view.animation.AccelerateDecelerateInterpolator;
-import android.view.animation.LinearInterpolator;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.Toast;
 
@@ -24,6 +23,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
@@ -32,11 +32,10 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     private BottomNavigationView bottomNav;
     private View downloadButtonContainer;
     private ImageView downloadButton;
-    private ObjectAnimator pulseAnimator;
-    private ObjectAnimator navPulseAnimator;
     private String detectedVideoId;
     private WebAppInterface webAppInterface;
-    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private boolean isOnBrowserTab = true;
+    private String currentCenterIcon = "download";
 
     private final ActivityResultLauncher<Intent> manageStorageLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -75,22 +74,36 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         }
 
         bottomNav.setOnItemSelectedListener(item -> {
-            Fragment fragment = null;
             int id = item.getItemId();
             if (id == R.id.nav_history) {
-                fragment = new HistoryFragment();
+                isOnBrowserTab = false;
+                updateCenterButton();
+                loadFragment(new HistoryFragment());
+                return true;
             } else if (id == R.id.nav_download) {
-                triggerDownload();
+                handleCenterButtonClick();
                 return true;
             } else if (id == R.id.nav_settings) {
-                fragment = new SettingsFragment();
-            }
-            if (fragment != null) {
-                loadFragment(fragment);
+                isOnBrowserTab = false;
+                updateCenterButton();
+                loadFragment(new SettingsFragment());
                 return true;
             }
             return false;
         });
+
+        getSupportFragmentManager().registerFragmentLifecycleCallbacks(
+                new FragmentManager.FragmentLifecycleCallbacks() {
+                    @Override
+                    public void onFragmentResumed(FragmentManager fm, Fragment f) {
+                        if (f instanceof BrowserFragment) {
+                            isOnBrowserTab = true;
+                        } else {
+                            isOnBrowserTab = false;
+                        }
+                        updateCenterButton();
+                    }
+                }, true);
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -111,6 +124,40 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         checkPermissions();
     }
 
+    private void handleCenterButtonClick() {
+        if (isOnBrowserTab) {
+            triggerDownload();
+        } else {
+            isOnBrowserTab = true;
+            bottomNav.getMenu().findItem(R.id.nav_download).setChecked(true);
+            loadFragment(new BrowserFragment());
+        }
+    }
+
+    private void updateCenterButton() {
+        if (bottomNav == null) return;
+
+        if (isOnBrowserTab) {
+            if (!currentCenterIcon.equals("download")) {
+                bottomNav.getMenu().findItem(R.id.nav_download)
+                        .setIcon(R.drawable.ic_download_white);
+                currentCenterIcon = "download";
+                bottomNav.getMenu().findItem(R.id.nav_download).setTitle(R.string.nav_download);
+                if (detectedVideoId != null && !detectedVideoId.isEmpty()) {
+                    setNavDownloadActive(true);
+                }
+            }
+        } else {
+            if (!currentCenterIcon.equals("browser")) {
+                cancelNavPulse();
+                bottomNav.getMenu().findItem(R.id.nav_download)
+                        .setIcon(R.drawable.ic_browser);
+                currentCenterIcon = "browser";
+                bottomNav.getMenu().findItem(R.id.nav_download).setTitle(R.string.nav_browser);
+            }
+        }
+    }
+
     public void setWebAppInterface(WebAppInterface iface) {
         this.webAppInterface = iface;
     }
@@ -124,81 +171,82 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         if (webAppInterface != null) {
             String title = "redgifs_" + detectedVideoId;
             webAppInterface.downloadVideo(detectedVideoId, title);
+            playDownloadGlow();
         } else {
             Toast.makeText(this, getString(R.string.download_failed_generic), Toast.LENGTH_SHORT).show();
         }
     }
 
+    private void playDownloadGlow() {
+        downloadButtonContainer.setVisibility(View.VISIBLE);
+
+        downloadButton.setScaleX(0.6f);
+        downloadButton.setScaleY(0.6f);
+        downloadButton.setAlpha(0.0f);
+        downloadButton.setBackground(ContextCompat.getDrawable(this, R.drawable.bg_download_fab_active));
+
+        downloadButton.animate()
+                .scaleX(1.0f).scaleY(1.0f).alpha(1.0f)
+                .setDuration(300)
+                .setInterpolator(new DecelerateInterpolator())
+                .withEndAction(() -> downloadButton.animate()
+                        .alpha(0.0f)
+                        .setStartDelay(600)
+                        .setDuration(400)
+                        .withEndAction(() -> downloadButtonContainer.setVisibility(View.GONE))
+                        .start())
+                .start();
+    }
+
     @Override
     public void onVideoDetected(String videoId) {
         detectedVideoId = videoId;
-
-        setNavDownloadActive(true);
-
-        SharedPreferences prefs = getSharedPreferences("redgifs_prefs", 0);
-        boolean fabEnabled = prefs.getBoolean("show_fab", false);
-
-        if (fabEnabled) {
-            downloadButtonContainer.setVisibility(View.VISIBLE);
-            downloadButton.setAlpha(1.0f);
-            downloadButton.setBackground(ContextCompat.getDrawable(this, R.drawable.bg_download_fab_active));
-
-            if (pulseAnimator == null || !pulseAnimator.isRunning()) {
-                pulseAnimator = ObjectAnimator.ofFloat(downloadButton, "alpha", 1.0f, 0.5f, 1.0f);
-                pulseAnimator.setDuration(1200);
-                pulseAnimator.setRepeatCount(ObjectAnimator.INFINITE);
-                pulseAnimator.setInterpolator(new LinearInterpolator());
-                pulseAnimator.start();
-            }
+        if (isOnBrowserTab) {
+            setNavDownloadActive(true);
         }
     }
 
     @Override
     public void onVideoLost() {
         detectedVideoId = null;
-
         setNavDownloadActive(false);
-
-        if (pulseAnimator != null && pulseAnimator.isRunning()) {
-            pulseAnimator.cancel();
-        }
-        downloadButton.setAlpha(0.4f);
-        downloadButton.setBackground(ContextCompat.getDrawable(this, R.drawable.bg_download_fab));
-        downloadButtonContainer.setVisibility(View.GONE);
     }
 
     private void setNavDownloadActive(boolean active) {
-        if (bottomNav == null) return;
+        if (bottomNav == null || !isOnBrowserTab) return;
 
         View downloadView = bottomNav.findViewById(R.id.nav_download);
         if (downloadView == null) return;
 
-        if (navPulseAnimator != null && navPulseAnimator.isRunning()) {
-            navPulseAnimator.cancel();
-        }
+        cancelNavPulse();
 
         if (active) {
             bottomNav.getMenu().findItem(R.id.nav_download)
                     .setIcon(R.drawable.ic_download_active);
 
-            downloadView.animate().cancel();
             downloadView.setScaleX(1.0f);
             downloadView.setScaleY(1.0f);
 
-            navPulseAnimator = ObjectAnimator.ofFloat(downloadView, "scaleX", 1.0f, 1.25f, 1.0f);
-            ObjectAnimator scaleY = ObjectAnimator.ofFloat(downloadView, "scaleY", 1.0f, 1.25f, 1.0f);
-            navPulseAnimator.setDuration(800);
-            navPulseAnimator.setRepeatCount(ObjectAnimator.INFINITE);
-            navPulseAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
-            scaleY.setDuration(800);
-            scaleY.setRepeatCount(ObjectAnimator.INFINITE);
+            ObjectAnimator scaleX = ObjectAnimator.ofFloat(downloadView, "scaleX", 1.0f, 1.2f, 1.0f);
+            ObjectAnimator scaleY = ObjectAnimator.ofFloat(downloadView, "scaleY", 1.0f, 1.2f, 1.0f);
+            scaleX.setDuration(500);
+            scaleX.setInterpolator(new AccelerateDecelerateInterpolator());
+            scaleY.setDuration(500);
             scaleY.setInterpolator(new AccelerateDecelerateInterpolator());
-            navPulseAnimator.start();
+            scaleX.start();
             scaleY.start();
         } else {
             bottomNav.getMenu().findItem(R.id.nav_download)
                     .setIcon(R.drawable.ic_download_white);
 
+            downloadView.setScaleX(1.0f);
+            downloadView.setScaleY(1.0f);
+        }
+    }
+
+    private void cancelNavPulse() {
+        View downloadView = bottomNav.findViewById(R.id.nav_download);
+        if (downloadView != null) {
             downloadView.animate().cancel();
             downloadView.setScaleX(1.0f);
             downloadView.setScaleY(1.0f);
