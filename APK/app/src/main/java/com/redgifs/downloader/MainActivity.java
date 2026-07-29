@@ -4,15 +4,16 @@ import android.animation.ObjectAnimator;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -32,9 +33,10 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     private View downloadButtonContainer;
     private ImageView downloadButton;
     private ObjectAnimator pulseAnimator;
+    private ObjectAnimator navPulseAnimator;
     private String detectedVideoId;
     private WebAppInterface webAppInterface;
-    private MenuItem downloadNavItem;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     private final ActivityResultLauncher<Intent> manageStorageLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -68,8 +70,6 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
 
         downloadButton.setOnClickListener(v -> triggerDownload());
 
-        bottomNav.getMenu().getItem(0).setChecked(true);
-
         if (savedInstanceState == null) {
             loadFragment(new BrowserFragment());
         }
@@ -77,14 +77,11 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         bottomNav.setOnItemSelectedListener(item -> {
             Fragment fragment = null;
             int id = item.getItemId();
-            if (id == R.id.nav_browser) {
-                fragment = new BrowserFragment();
+            if (id == R.id.nav_history) {
+                fragment = new HistoryFragment();
             } else if (id == R.id.nav_download) {
                 triggerDownload();
-                bottomNav.getMenu().getItem(0).setChecked(true);
                 return true;
-            } else if (id == R.id.nav_history) {
-                fragment = new HistoryFragment();
             } else if (id == R.id.nav_settings) {
                 fragment = new SettingsFragment();
             }
@@ -136,9 +133,7 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     public void onVideoDetected(String videoId) {
         detectedVideoId = videoId;
 
-        if (downloadNavItem != null) {
-            downloadNavItem.setIcon(R.drawable.ic_download_active);
-        }
+        setNavDownloadActive(true);
 
         SharedPreferences prefs = getSharedPreferences("redgifs_prefs", 0);
         boolean fabEnabled = prefs.getBoolean("show_fab", false);
@@ -146,8 +141,7 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         if (fabEnabled) {
             downloadButtonContainer.setVisibility(View.VISIBLE);
             downloadButton.setAlpha(1.0f);
-            GradientDrawable bg = (GradientDrawable) ContextCompat.getDrawable(this, R.drawable.bg_download_fab_active);
-            downloadButton.setBackground(bg);
+            downloadButton.setBackground(ContextCompat.getDrawable(this, R.drawable.bg_download_fab_active));
 
             if (pulseAnimator == null || !pulseAnimator.isRunning()) {
                 pulseAnimator = ObjectAnimator.ofFloat(downloadButton, "alpha", 1.0f, 0.5f, 1.0f);
@@ -163,17 +157,52 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     public void onVideoLost() {
         detectedVideoId = null;
 
-        if (downloadNavItem != null) {
-            downloadNavItem.setIcon(R.drawable.ic_download_white);
-        }
+        setNavDownloadActive(false);
 
         if (pulseAnimator != null && pulseAnimator.isRunning()) {
             pulseAnimator.cancel();
         }
         downloadButton.setAlpha(0.4f);
-        GradientDrawable bg = (GradientDrawable) ContextCompat.getDrawable(this, R.drawable.bg_download_fab);
-        downloadButton.setBackground(bg);
+        downloadButton.setBackground(ContextCompat.getDrawable(this, R.drawable.bg_download_fab));
         downloadButtonContainer.setVisibility(View.GONE);
+    }
+
+    private void setNavDownloadActive(boolean active) {
+        if (bottomNav == null) return;
+
+        View downloadView = bottomNav.findViewById(R.id.nav_download);
+        if (downloadView == null) return;
+
+        if (navPulseAnimator != null && navPulseAnimator.isRunning()) {
+            navPulseAnimator.cancel();
+        }
+
+        if (active) {
+            bottomNav.getMenu().findItem(R.id.nav_download)
+                    .setIcon(R.drawable.ic_download_active);
+
+            downloadView.animate().cancel();
+            downloadView.setScaleX(1.0f);
+            downloadView.setScaleY(1.0f);
+
+            navPulseAnimator = ObjectAnimator.ofFloat(downloadView, "scaleX", 1.0f, 1.25f, 1.0f);
+            ObjectAnimator scaleY = ObjectAnimator.ofFloat(downloadView, "scaleY", 1.0f, 1.25f, 1.0f);
+            navPulseAnimator.setDuration(800);
+            navPulseAnimator.setRepeatCount(ObjectAnimator.INFINITE);
+            navPulseAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
+            scaleY.setDuration(800);
+            scaleY.setRepeatCount(ObjectAnimator.INFINITE);
+            scaleY.setInterpolator(new AccelerateDecelerateInterpolator());
+            navPulseAnimator.start();
+            scaleY.start();
+        } else {
+            bottomNav.getMenu().findItem(R.id.nav_download)
+                    .setIcon(R.drawable.ic_download_white);
+
+            downloadView.animate().cancel();
+            downloadView.setScaleX(1.0f);
+            downloadView.setScaleY(1.0f);
+        }
     }
 
     public void refreshFabVisibility() {

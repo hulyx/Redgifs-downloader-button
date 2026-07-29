@@ -1,7 +1,6 @@
 package com.redgifs.downloader;
 
 import android.annotation.SuppressLint;
-import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -111,10 +110,6 @@ public class BrowserFragment extends Fragment {
     }
 
     private void injectDownloadScript() {
-        SharedPreferences prefs = requireContext().getSharedPreferences("redgifs_prefs", 0);
-        boolean autoInject = prefs.getBoolean("auto_inject", true);
-        if (!autoInject) return;
-
         try {
             InputStream is = requireContext().getAssets().open("inject.js");
             BufferedReader reader = new BufferedReader(new InputStreamReader(is));
