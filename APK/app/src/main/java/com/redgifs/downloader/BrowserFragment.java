@@ -51,7 +51,9 @@ public class BrowserFragment extends Fragment {
         webView.addJavascriptInterface(webAppInterface, "Android");
 
         if (getActivity() instanceof MainActivity) {
-            webAppInterface.setVideoDetectionListener((MainActivity) getActivity());
+            MainActivity mainActivity = (MainActivity) getActivity();
+            webAppInterface.setVideoDetectionListener(mainActivity);
+            mainActivity.setWebAppInterface(webAppInterface);
         }
 
         DownloadService.setSharedWebView(webView);
@@ -75,7 +77,7 @@ public class BrowserFragment extends Fragment {
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setUserAgentString(settings.getUserAgentString()
-                .replace("wv", "") + " RedgifsDownloader/1.1");
+                .replace("wv", "") + " RedgifsDownloader/1.2");
 
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 

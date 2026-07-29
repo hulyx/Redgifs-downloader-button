@@ -28,4 +28,8 @@
     <string name="download_started">Download started</string>
     <string name="download_complete">Download complete</string>
     <string name="download_failed">Download failed</string>
+    <string name="nav_download">Download</string>
+    <string name="no_video_detected">No video detected. Play a video first.</string>
+    <string name="download_failed_generic">Download unavailable. Open the browser first.</string>
+    <string name="show_fab">Floating Download Button</string>
 </resources>

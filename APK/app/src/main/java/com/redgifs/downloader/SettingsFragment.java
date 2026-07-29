@@ -5,8 +5,6 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.SeekBar;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,6 +17,7 @@ public class SettingsFragment extends Fragment {
     private static final String PREFS_NAME = "redgifs_prefs";
     private static final String KEY_HD_ONLY = "hd_only";
     private static final String KEY_AUTO_INJECT = "auto_inject";
+    private static final String KEY_SHOW_FAB = "show_fab";
 
     @Nullable
     @Override
@@ -35,14 +34,23 @@ public class SettingsFragment extends Fragment {
 
         SwitchMaterial hdSwitch = view.findViewById(R.id.switch_hd_only);
         SwitchMaterial autoInjectSwitch = view.findViewById(R.id.switch_auto_inject);
+        SwitchMaterial showFabSwitch = view.findViewById(R.id.switch_show_fab);
 
         hdSwitch.setChecked(prefs.getBoolean(KEY_HD_ONLY, true));
         autoInjectSwitch.setChecked(prefs.getBoolean(KEY_AUTO_INJECT, true));
+        showFabSwitch.setChecked(prefs.getBoolean(KEY_SHOW_FAB, false));
 
         hdSwitch.setOnCheckedChangeListener((btn, checked) ->
                 prefs.edit().putBoolean(KEY_HD_ONLY, checked).apply());
 
         autoInjectSwitch.setOnCheckedChangeListener((btn, checked) ->
                 prefs.edit().putBoolean(KEY_AUTO_INJECT, checked).apply());
+
+        showFabSwitch.setOnCheckedChangeListener((btn, checked) -> {
+            prefs.edit().putBoolean(KEY_SHOW_FAB, checked).apply();
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).refreshFabVisibility();
+            }
+        });
     }
 }

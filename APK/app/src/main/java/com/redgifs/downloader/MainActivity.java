@@ -10,8 +10,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
-import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -32,6 +33,8 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     private ImageView downloadButton;
     private ObjectAnimator pulseAnimator;
     private String detectedVideoId;
+    private WebAppInterface webAppInterface;
+    private MenuItem downloadNavItem;
 
     private final ActivityResultLauncher<Intent> manageStorageLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -63,16 +66,9 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         downloadButtonContainer = findViewById(R.id.download_button_container);
         downloadButton = findViewById(R.id.download_button);
 
-        downloadButton.setOnClickListener(v -> {
-            if (detectedVideoId != null && !detectedVideoId.isEmpty()) {
-                SharedPreferences prefs = getSharedPreferences("redgifs_prefs", 0);
-                boolean hdOnly = prefs.getBoolean("hd_only", true);
-                String title = "redgifs_" + detectedVideoId;
+        downloadButton.setOnClickListener(v -> triggerDownload());
 
-                WebAppInterface iface = new WebAppInterface(this, this);
-                iface.downloadVideo(detectedVideoId, title);
-            }
-        });
+        bottomNav.getMenu().getItem(0).setChecked(true);
 
         if (savedInstanceState == null) {
             loadFragment(new BrowserFragment());
@@ -83,6 +79,10 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
             int id = item.getItemId();
             if (id == R.id.nav_browser) {
                 fragment = new BrowserFragment();
+            } else if (id == R.id.nav_download) {
+                triggerDownload();
+                bottomNav.getMenu().getItem(0).setChecked(true);
+                return true;
             } else if (id == R.id.nav_history) {
                 fragment = new HistoryFragment();
             } else if (id == R.id.nav_settings) {
@@ -114,26 +114,59 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         checkPermissions();
     }
 
+    public void setWebAppInterface(WebAppInterface iface) {
+        this.webAppInterface = iface;
+    }
+
+    public void triggerDownload() {
+        if (detectedVideoId == null || detectedVideoId.isEmpty()) {
+            Toast.makeText(this, getString(R.string.no_video_detected), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (webAppInterface != null) {
+            String title = "redgifs_" + detectedVideoId;
+            webAppInterface.downloadVideo(detectedVideoId, title);
+        } else {
+            Toast.makeText(this, getString(R.string.download_failed_generic), Toast.LENGTH_SHORT).show();
+        }
+    }
+
     @Override
     public void onVideoDetected(String videoId) {
         detectedVideoId = videoId;
-        downloadButtonContainer.setVisibility(View.VISIBLE);
-        downloadButton.setAlpha(1.0f);
-        GradientDrawable bg = (GradientDrawable) ContextCompat.getDrawable(this, R.drawable.bg_download_fab_active);
-        downloadButton.setBackground(bg);
 
-        if (pulseAnimator == null || !pulseAnimator.isRunning()) {
-            pulseAnimator = ObjectAnimator.ofFloat(downloadButton, "alpha", 1.0f, 0.5f, 1.0f);
-            pulseAnimator.setDuration(1200);
-            pulseAnimator.setRepeatCount(ObjectAnimator.INFINITE);
-            pulseAnimator.setInterpolator(new LinearInterpolator());
-            pulseAnimator.start();
+        if (downloadNavItem != null) {
+            downloadNavItem.setIcon(R.drawable.ic_download_active);
+        }
+
+        SharedPreferences prefs = getSharedPreferences("redgifs_prefs", 0);
+        boolean fabEnabled = prefs.getBoolean("show_fab", false);
+
+        if (fabEnabled) {
+            downloadButtonContainer.setVisibility(View.VISIBLE);
+            downloadButton.setAlpha(1.0f);
+            GradientDrawable bg = (GradientDrawable) ContextCompat.getDrawable(this, R.drawable.bg_download_fab_active);
+            downloadButton.setBackground(bg);
+
+            if (pulseAnimator == null || !pulseAnimator.isRunning()) {
+                pulseAnimator = ObjectAnimator.ofFloat(downloadButton, "alpha", 1.0f, 0.5f, 1.0f);
+                pulseAnimator.setDuration(1200);
+                pulseAnimator.setRepeatCount(ObjectAnimator.INFINITE);
+                pulseAnimator.setInterpolator(new LinearInterpolator());
+                pulseAnimator.start();
+            }
         }
     }
 
     @Override
     public void onVideoLost() {
         detectedVideoId = null;
+
+        if (downloadNavItem != null) {
+            downloadNavItem.setIcon(R.drawable.ic_download_white);
+        }
+
         if (pulseAnimator != null && pulseAnimator.isRunning()) {
             pulseAnimator.cancel();
         }
@@ -141,6 +174,14 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         GradientDrawable bg = (GradientDrawable) ContextCompat.getDrawable(this, R.drawable.bg_download_fab);
         downloadButton.setBackground(bg);
         downloadButtonContainer.setVisibility(View.GONE);
+    }
+
+    public void refreshFabVisibility() {
+        if (detectedVideoId != null && !detectedVideoId.isEmpty()) {
+            onVideoDetected(detectedVideoId);
+        } else {
+            onVideoLost();
+        }
     }
 
     private void loadFragment(Fragment fragment) {

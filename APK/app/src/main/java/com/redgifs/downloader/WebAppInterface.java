@@ -90,18 +90,28 @@ public class WebAppInterface {
                     return;
                 }
 
-                android.content.Intent intent = new android.content.Intent(context, DownloadService.class);
-                intent.putExtra(DownloadService.EXTRA_URL, directUrl);
-                intent.putExtra(DownloadService.EXTRA_FILENAME, filename);
-                intent.putExtra(DownloadService.EXTRA_VIDEO_ID, videoId);
+                final String finalUrl = directUrl;
+                final String finalFilename = filename;
 
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent);
-                } else {
-                    context.startService(intent);
-                }
+                activity.runOnUiThread(() -> {
+                    try {
+                        android.content.Intent intent = new android.content.Intent(context, DownloadService.class);
+                        intent.putExtra(DownloadService.EXTRA_URL, finalUrl);
+                        intent.putExtra(DownloadService.EXTRA_FILENAME, finalFilename);
+                        intent.putExtra(DownloadService.EXTRA_VIDEO_ID, videoId);
 
-                showToast("Download started: " + filename);
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            context.startForegroundService(intent);
+                        } else {
+                            context.startService(intent);
+                        }
+
+                        showToast("Download started: " + finalFilename);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Service start failed: " + e.getMessage());
+                        showToast("Download failed: " + e.getMessage());
+                    }
+                });
 
             } catch (Exception e) {
                 Log.e(TAG, "Download failed: " + e.getMessage());
