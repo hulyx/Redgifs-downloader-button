@@ -1,9 +1,13 @@
 package com.redgifs.downloader;
 
 import android.app.AlertDialog;
+import android.content.ContentUris;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,7 +17,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.button.MaterialButton;
@@ -53,7 +57,7 @@ public class HistoryFragment extends Fragment implements HistoryAdapter.OnItemAc
         clearAllBtn = view.findViewById(R.id.btn_clear_all);
 
         adapter = new HistoryAdapter(new ArrayList<>(), this);
-        recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
+        recyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
         recyclerView.setAdapter(adapter);
 
         clearAllBtn.setOnClickListener(v -> {
@@ -110,17 +114,17 @@ public class HistoryFragment extends Fragment implements HistoryAdapter.OnItemAc
 
     @Override
     public void onPlay(DownloadItem item) {
-        String localPath = item.getLocalFilePath();
-        if (localPath != null && !localPath.isEmpty()) {
+        String filename = item.getFilename();
+        if (filename == null || filename.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.cannot_play, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Uri mediaUri = queryMediaStoreUri(filename);
+        if (mediaUri != null) {
             try {
                 Intent intent = new Intent(Intent.ACTION_VIEW);
-                Uri uri;
-                if (localPath.startsWith("/")) {
-                    uri = Uri.parse("file://" + localPath);
-                } else {
-                    uri = Uri.parse("content://com.android.providers.downloads.documents/document/primary:Download/Redgifs/" + item.getFilename());
-                }
-                intent.setDataAndType(uri, "video/mp4");
+                intent.setDataAndType(mediaUri, "video/mp4");
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 startActivity(intent);
             } catch (Exception e) {
@@ -131,6 +135,45 @@ public class HistoryFragment extends Fragment implements HistoryAdapter.OnItemAc
         }
     }
 
+    private Uri queryMediaStoreUri(String filename) {
+        String[] projection = {MediaStore.Downloads._ID};
+        String selection = MediaStore.Downloads.DISPLAY_NAME + " = ?";
+        String[] selectionArgs = {filename};
+        String relativePath = Environment.DIRECTORY_DOWNLOADS + "/Redgifs/";
+
+        try (Cursor cursor = requireContext().getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                projection,
+                selection + " AND " + MediaStore.Downloads.RELATIVE_PATH + " = ?",
+                new String[]{filename, relativePath},
+                null)) {
+
+            if (cursor != null && cursor.moveToFirst()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
+                return ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id);
+            }
+        } catch (Exception e) {
+            // query failed
+        }
+
+        try (Cursor cursor = requireContext().getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                null)) {
+
+            if (cursor != null && cursor.moveToFirst()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
+                return ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id);
+            }
+        } catch (Exception e) {
+            // query failed
+        }
+
+        return null;
+    }
+
     @Override
     public void onDelete(DownloadItem item) {
         new AlertDialog.Builder(requireContext())
@@ -138,6 +181,9 @@ public class HistoryFragment extends Fragment implements HistoryAdapter.OnItemAc
                 .setMessage(R.string.delete_confirm)
                 .setPositiveButton(R.string.yes, (d, w) -> {
                     executor.execute(() -> {
+                        if (item.getLocalFilePath() != null && !item.getLocalFilePath().isEmpty()) {
+                            deleteMediaStoreFile(item.getFilename());
+                        }
                         db.downloadDao().delete(item);
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
@@ -149,5 +195,19 @@ public class HistoryFragment extends Fragment implements HistoryAdapter.OnItemAc
                 })
                 .setNegativeButton(R.string.no, null)
                 .show();
+    }
+
+    private void deleteMediaStoreFile(String filename) {
+        try {
+            String selection = MediaStore.Downloads.DISPLAY_NAME + " = ?";
+            String[] selectionArgs = {filename};
+            requireContext().getContentResolver().delete(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    selection,
+                    selectionArgs
+            );
+        } catch (Exception e) {
+            // delete failed
+        }
     }
 }
