@@ -88,7 +88,7 @@ public class BrowserFragment extends Fragment {
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setUserAgentString(settings.getUserAgentString()
-                .replace("wv", "") + " RedgifsDownloader/1.6");
+                .replace("wv", "") + " RedgifsDownloader/1.7");
 
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 

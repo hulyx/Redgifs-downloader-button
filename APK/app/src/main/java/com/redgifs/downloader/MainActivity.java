@@ -34,6 +34,7 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     private String detectedVideoId;
     private WebAppInterface webAppInterface;
     private BrowserFragment browserFragment;
+    private Fragment currentFragment;
 
     private static final String TAG_BROWSER = "tag_browser";
     private static final String TAG_HISTORY = "tag_history";
@@ -75,11 +76,13 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
 
         if (savedInstanceState == null) {
             browserFragment = new BrowserFragment();
+            currentFragment = browserFragment;
             fm.beginTransaction()
                     .add(R.id.fragment_container, browserFragment, TAG_BROWSER)
                     .commit();
         } else {
             browserFragment = (BrowserFragment) fm.findFragmentByTag(TAG_BROWSER);
+            currentFragment = browserFragment;
         }
 
         bottomNav.setOnItemSelectedListener(item -> {
@@ -102,13 +105,9 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                FragmentManager fm = getSupportFragmentManager();
-                Fragment current = fm.findFragmentById(R.id.fragment_container);
-
-                if (current instanceof BrowserFragment) {
-                    BrowserFragment browser = (BrowserFragment) current;
-                    if (browser.canGoBack()) {
-                        browser.goBack();
+                if (currentFragment instanceof BrowserFragment) {
+                    if (browserFragment != null && browserFragment.canGoBack()) {
+                        browserFragment.goBack();
                         return;
                     }
                 } else {
@@ -128,19 +127,21 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         FragmentManager fm = getSupportFragmentManager();
         FragmentTransaction ft = fm.beginTransaction();
 
-        Fragment current = fm.findFragmentById(R.id.fragment_container);
-        if (current != null) {
-            ft.hide(current);
+        if (currentFragment != null) {
+            ft.hide(currentFragment);
         }
 
         Fragment existing = fm.findFragmentByTag(tag);
         if (existing != null) {
             ft.show(existing);
+            currentFragment = existing;
         } else {
             ft.add(R.id.fragment_container, newFragment, tag);
+            currentFragment = newFragment;
         }
 
         ft.commit();
+        updateFabPersistentState();
     }
 
     private void showBrowserFragment() {
@@ -149,23 +150,21 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         FragmentManager fm = getSupportFragmentManager();
         FragmentTransaction ft = fm.beginTransaction();
 
-        Fragment current = fm.findFragmentById(R.id.fragment_container);
-        if (current != null && current != browserFragment) {
-            ft.hide(current);
+        if (currentFragment != null && currentFragment != browserFragment) {
+            ft.hide(currentFragment);
         }
 
         ft.show(browserFragment);
         ft.commit();
+        currentFragment = browserFragment;
 
         bottomNav.getMenu().findItem(R.id.nav_download).setChecked(true);
         updateCenterButton(true);
+        updateFabPersistentState();
     }
 
     private void handleCenterButtonClick() {
-        FragmentManager fm = getSupportFragmentManager();
-        Fragment current = fm.findFragmentById(R.id.fragment_container);
-
-        if (current instanceof BrowserFragment) {
+        if (currentFragment instanceof BrowserFragment) {
             triggerDownload();
         } else {
             showBrowserFragment();
@@ -203,16 +202,14 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         if (webAppInterface != null) {
             String title = "redgifs_" + detectedVideoId;
             webAppInterface.downloadVideo(detectedVideoId, title);
-            SharedPreferences prefs = getSharedPreferences("redgifs_prefs", 0);
-            if (prefs.getBoolean("show_fab", false)) {
-                playDownloadGlow();
-            }
+            playDownloadGlow();
         } else {
             Toast.makeText(this, getString(R.string.download_failed_generic), Toast.LENGTH_SHORT).show();
         }
     }
 
     private void playDownloadGlow() {
+        boolean wasPersistent = downloadButtonContainer.getVisibility() == View.VISIBLE;
         downloadButtonContainer.setVisibility(View.VISIBLE);
 
         downloadButton.setScaleX(0.6f);
@@ -228,7 +225,13 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
                         .alpha(0.0f)
                         .setStartDelay(600)
                         .setDuration(400)
-                        .withEndAction(() -> downloadButtonContainer.setVisibility(View.GONE))
+                        .withEndAction(() -> {
+                            if (wasPersistent) {
+                                updateFabPersistentState();
+                            } else {
+                                downloadButtonContainer.setVisibility(View.GONE);
+                            }
+                        })
                         .start())
                 .start();
     }
@@ -237,25 +240,23 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     public void onVideoDetected(String videoId) {
         detectedVideoId = videoId;
 
-        FragmentManager fm = getSupportFragmentManager();
-        Fragment current = fm.findFragmentById(R.id.fragment_container);
-        if (current instanceof BrowserFragment) {
+        if (currentFragment instanceof BrowserFragment) {
             setNavDownloadActive(true);
         }
+        updateFabPersistentState();
     }
 
     @Override
     public void onVideoLost() {
         detectedVideoId = null;
         setNavDownloadActive(false);
+        updateFabPersistentState();
     }
 
     private void setNavDownloadActive(boolean active) {
         if (bottomNav == null) return;
 
-        FragmentManager fm = getSupportFragmentManager();
-        Fragment current = fm.findFragmentById(R.id.fragment_container);
-        if (!(current instanceof BrowserFragment)) return;
+        if (!(currentFragment instanceof BrowserFragment)) return;
 
         View downloadView = bottomNav.findViewById(R.id.nav_download);
         if (downloadView == null) return;
@@ -295,12 +296,25 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         }
     }
 
-    public void refreshFabVisibility() {
-        if (detectedVideoId != null && !detectedVideoId.isEmpty()) {
-            onVideoDetected(detectedVideoId);
+    private void updateFabPersistentState() {
+        SharedPreferences prefs = getSharedPreferences("redgifs_prefs", 0);
+        boolean showFab = prefs.getBoolean("show_fab", false);
+        boolean videoDetected = detectedVideoId != null && !detectedVideoId.isEmpty();
+        boolean onBrowser = currentFragment instanceof BrowserFragment;
+
+        if (showFab && videoDetected && onBrowser) {
+            downloadButton.setScaleX(1.0f);
+            downloadButton.setScaleY(1.0f);
+            downloadButton.setAlpha(1.0f);
+            downloadButton.setBackground(ContextCompat.getDrawable(this, R.drawable.bg_download_fab));
+            downloadButtonContainer.setVisibility(View.VISIBLE);
         } else {
-            onVideoLost();
+            downloadButtonContainer.setVisibility(View.GONE);
         }
+    }
+
+    public void refreshFabVisibility() {
+        updateFabPersistentState();
     }
 
     private void checkPermissions() {
