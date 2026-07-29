@@ -5,50 +5,77 @@
     window.__redgifsDownloaderInjected = true;
 
     var currentVideoId = null;
+    var lastUrl = location.href;
     var checkInterval = null;
+
+    // --- SPA URL change detection (pushState override + popstate) ---
+    function onUrlChanged() {
+        if (location.href === lastUrl) return;
+        lastUrl = location.href;
+        currentVideoId = null;
+        try { Android.onVideoLost(); } catch(e) {}
+        setTimeout(function() {
+            document.querySelectorAll('video').forEach(function(v) {
+                v.addEventListener('play', function() { setTimeout(checkVideo, 300); });
+                v.addEventListener('pause', function() { setTimeout(checkVideo, 500); });
+                v.addEventListener('ended', function() { setTimeout(checkVideo, 500); });
+            });
+            checkVideo();
+        }, 1000);
+    }
+
+    (function() {
+        var origPushState = history.pushState;
+        var origReplaceState = history.replaceState;
+        history.pushState = function() { origPushState.apply(this, arguments); onUrlChanged(); };
+        history.replaceState = function() { origReplaceState.apply(this, arguments); onUrlChanged(); };
+    })();
+    window.addEventListener('popstate', onUrlChanged);
+
+    // --- Extract video ID from a specific video element or the page ---
+    function extractIdFromVideo(v) {
+        if (!v) return null;
+
+        // 1. Walk up ancestors looking for data-id / data-gif-id / data-feed-item-id
+        var el = v.parentElement;
+        while (el && el !== document.body) {
+            var did = el.getAttribute('data-id') || el.getAttribute('data-gif-id') || el.getAttribute('data-feed-item-id');
+            if (did) return did;
+            el = el.parentElement;
+        }
+
+        // 2. Check poster attribute
+        var poster = v.getAttribute('poster');
+        if (poster) {
+            var pMatch = poster.match(/\/([A-Za-z][A-Za-z0-9]{5,})[-._]/);
+            if (pMatch) return pMatch[1];
+        }
+
+        // 3. Check src / source URLs
+        var src = v.src || v.getAttribute('src') || '';
+        if (!src) {
+            var source = v.querySelector('source');
+            if (source) src = source.getAttribute('src') || '';
+        }
+        if (src) {
+            var s1 = src.match(/\/([A-Za-z][A-Za-z0-9]{5,})\.(?:hd|sd|mobile)\.(?:mp4|m4s)/);
+            if (s1) return s1[1];
+            var s2 = src.match(/\/([A-Za-z][A-Za-z0-9]{5,})\.(?:mp4|m4s)/);
+            if (s2) return s2[1];
+            var s3 = src.match(/\/watch\/([A-Za-z0-9]+)/);
+            if (s3) return s3[1];
+        }
+
+        return null;
+    }
 
     // --- Extract video ID from the page ---
     function extractVideoId() {
-        // 1. URL path: /watch/VIDEO_ID
+        // 0. Check URL path first (works on watch pages)
         var urlMatch = window.location.pathname.match(/\/watch\/([A-Za-z0-9]+)/);
         if (urlMatch) return urlMatch[1];
 
-        // 2. data-feed-item-id on any ancestor of a playing video
-        var feedItems = document.querySelectorAll('[data-feed-item-id]');
-        for (var i = 0; i < feedItems.length; i++) {
-            var video = feedItems[i].querySelector('video');
-            if (video && !video.paused && video.readyState > 2) {
-                return feedItems[i].getAttribute('data-feed-item-id');
-            }
-        }
-
-        // 3. From video src URL patterns
-        var videos = document.querySelectorAll('video');
-        for (var j = 0; j < videos.length; j++) {
-            var v = videos[j];
-            if (v.paused || v.readyState < 2) continue;
-
-            // Check src attribute
-            var src = v.src || v.getAttribute('src') || '';
-            if (!src) {
-                var source = v.querySelector('source');
-                if (source) src = source.getAttribute('src') || '';
-            }
-
-            // Pattern: /VIDEO_ID.hd.mp4 or /VIDEO_ID.sd.mp4
-            var srcMatch = src.match(/\/([A-Za-z][A-Za-z0-9]{5,})\.(?:hd|sd|mobile)\.(?:mp4|m4s)/);
-            if (srcMatch) return srcMatch[1];
-
-            // Pattern: /VIDEO_ID.mp4 or /VIDEO_ID.m4s
-            var srcMatch2 = src.match(/\/([A-Za-z][A-Za-z0-9]{5,})\.(?:mp4|m4s)/);
-            if (srcMatch2) return srcMatch2[1];
-
-            // Pattern: /watch/VIDEO_ID
-            var srcMatch3 = src.match(/\/watch\/([A-Za-z0-9]+)/);
-            if (srcMatch3) return srcMatch3[1];
-        }
-
-        // 4. From meta tags
+        // 1. From meta tags
         var metas = document.querySelectorAll('meta[property="og:url"], meta[property="og:video"]');
         for (var k = 0; k < metas.length; k++) {
             var content = metas[k].getAttribute('content');
@@ -58,14 +85,7 @@
             }
         }
 
-        // 5. From any element with data-id or data-gif-id
-        var dataEls = document.querySelectorAll('[data-id], [data-gif-id]');
-        for (var m = 0; m < dataEls.length; m++) {
-            var did = dataEls[m].getAttribute('data-id') || dataEls[m].getAttribute('data-gif-id');
-            if (did) return did;
-        }
-
-        // 6. From video poster: Poster for VIDEO_ID
+        // 2. From images with alt="Poster for VIDEOID"
         var imgs = document.querySelectorAll('img[alt]');
         for (var n = 0; n < imgs.length; n++) {
             var alt = imgs[n].getAttribute('alt');
@@ -75,30 +95,51 @@
             }
         }
 
+        // 3. From elements with data-id / data-gif-id
+        var dataEls = document.querySelectorAll('[data-id], [data-gif-id]');
+        for (var m = 0; m < dataEls.length; m++) {
+            var did = dataEls[m].getAttribute('data-id') || dataEls[m].getAttribute('data-gif-id');
+            if (did) return did;
+        }
+
+        // 4. From video element src / poster / ancestors (any playing video)
+        var videos = document.querySelectorAll('video');
+        for (var j = 0; j < videos.length; j++) {
+            if (videos[j].paused || videos[j].readyState < 2) continue;
+            var id = extractIdFromVideo(videos[j]);
+            if (id) return id;
+        }
+
         return null;
     }
 
-    // --- Detect if any video is actively playing ---
-    function detectPlayingVideo() {
+    // --- Get first actively playing video element ---
+    function getPlayingVideo() {
         var videos = document.querySelectorAll('video');
         for (var i = 0; i < videos.length; i++) {
             var v = videos[i];
             if (!v.paused && v.readyState > 2 && v.currentTime > 0.5) {
-                return true;
+                return v;
             }
         }
-        return false;
+        return null;
     }
 
     // --- Check and report ---
     function checkVideo() {
-        var isPlaying = detectPlayingVideo();
-        var videoId = isPlaying ? extractVideoId() : null;
+        // Check for SPA URL change
+        if (location.href !== lastUrl) {
+            onUrlChanged();
+            return;
+        }
 
-        if (isPlaying && videoId && videoId !== currentVideoId) {
+        var playingVideo = getPlayingVideo();
+        var videoId = playingVideo ? (extractIdFromVideo(playingVideo) || extractVideoId()) : null;
+
+        if (videoId && videoId !== currentVideoId) {
             currentVideoId = videoId;
             try { Android.onVideoDetected(videoId); } catch(e) {}
-        } else if (!isPlaying && currentVideoId) {
+        } else if (!videoId && currentVideoId) {
             currentVideoId = null;
             try { Android.onVideoLost(); } catch(e) {}
         }
@@ -109,60 +150,34 @@
         if (checkInterval) return;
         checkInterval = setInterval(checkVideo, 1500);
 
-        // Also listen for play events on existing videos
+        // Listen for play events on all video elements
         document.addEventListener('play', function(e) {
             if (e.target && e.target.tagName === 'VIDEO') {
                 setTimeout(checkVideo, 300);
             }
         }, true);
 
-        // Re-bind when new videos are added
-        var observer = new MutationObserver(function(mutations) {
-            for (var i = 0; i < mutations.length; i++) {
-                for (var j = 0; j < mutations[i].addedNodes.length; j++) {
-                    var node = mutations[i].addedNodes[j];
-                    if (node.tagName === 'VIDEO') {
-                        node.addEventListener('play', function() {
-                            setTimeout(checkVideo, 300);
-                        });
-                    }
-                    if (node.querySelectorAll) {
-                        var vids = node.querySelectorAll('video');
-                        for (var k = 0; k < vids.length; k++) {
-                            vids[k].addEventListener('play', function() {
-                                setTimeout(checkVideo, 300);
-                            });
-                        }
-                    }
+        // Bind events to existing videos + watch for new ones
+        var mutationObserver = new MutationObserver(function() {
+            document.querySelectorAll('video').forEach(function(v) {
+                if (!v.__rdBound) {
+                    v.__rdBound = true;
+                    v.addEventListener('play', function() { setTimeout(checkVideo, 300); });
+                    v.addEventListener('pause', function() { setTimeout(checkVideo, 500); });
+                    v.addEventListener('ended', function() { setTimeout(checkVideo, 500); });
                 }
-            }
+            });
         });
 
-        observer.observe(document.body, { childList: true, subtree: true });
+        mutationObserver.observe(document.body, { childList: true, subtree: true });
 
-        // Bind to existing videos
+        // Bind to all current videos
         document.querySelectorAll('video').forEach(function(v) {
+            v.__rdBound = true;
             v.addEventListener('play', function() { setTimeout(checkVideo, 300); });
             v.addEventListener('pause', function() { setTimeout(checkVideo, 500); });
             v.addEventListener('ended', function() { setTimeout(checkVideo, 500); });
         });
-
-        // Re-init on SPA navigation
-        var lastUrl = location.href;
-        new MutationObserver(function() {
-            if (location.href !== lastUrl) {
-                lastUrl = location.href;
-                currentVideoId = null;
-                try { Android.onVideoLost(); } catch(e) {}
-                setTimeout(function() {
-                    document.querySelectorAll('video').forEach(function(v) {
-                        v.addEventListener('play', function() { setTimeout(checkVideo, 300); });
-                        v.addEventListener('pause', function() { setTimeout(checkVideo, 500); });
-                        v.addEventListener('ended', function() { setTimeout(checkVideo, 500); });
-                    });
-                }, 1000);
-            }
-        }).observe(document, { subtree: true, childList: true });
     }
 
     if (document.readyState === 'loading') {
