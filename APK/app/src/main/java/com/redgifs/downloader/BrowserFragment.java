@@ -17,6 +17,7 @@ import android.widget.ProgressBar;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,6 +62,17 @@ public class BrowserFragment extends Fragment {
             webView.restoreState(savedInstanceState);
         } else {
             webView.loadUrl(REDGIFS_URL);
+        }
+    }
+
+    @Override
+    public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
+        if (webView == null) return;
+        if (hidden) {
+            webView.onPause();
+        } else {
+            webView.onResume();
         }
     }
 
@@ -149,14 +161,14 @@ public class BrowserFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if (webView != null) {
+        if (webView != null && !isHidden()) {
             webView.onResume();
         }
     }
 
     @Override
     public void onPause() {
-        if (webView != null) {
+        if (webView != null && !isHidden()) {
             webView.onPause();
         }
         super.onPause();

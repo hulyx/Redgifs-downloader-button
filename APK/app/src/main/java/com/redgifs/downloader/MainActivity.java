@@ -8,8 +8,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
 import android.view.animation.AccelerateDecelerateInterpolator;
@@ -24,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
@@ -34,8 +33,11 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     private ImageView downloadButton;
     private String detectedVideoId;
     private WebAppInterface webAppInterface;
-    private boolean isOnBrowserTab = true;
-    private String currentCenterIcon = "download";
+    private BrowserFragment browserFragment;
+
+    private static final String TAG_BROWSER = "tag_browser";
+    private static final String TAG_HISTORY = "tag_history";
+    private static final String TAG_SETTINGS = "tag_settings";
 
     private final ActivityResultLauncher<Intent> manageStorageLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -69,53 +71,51 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
 
         downloadButton.setOnClickListener(v -> triggerDownload());
 
+        FragmentManager fm = getSupportFragmentManager();
+
         if (savedInstanceState == null) {
-            loadFragment(new BrowserFragment());
+            browserFragment = new BrowserFragment();
+            fm.beginTransaction()
+                    .add(R.id.fragment_container, browserFragment, TAG_BROWSER)
+                    .commit();
+        } else {
+            browserFragment = (BrowserFragment) fm.findFragmentByTag(TAG_BROWSER);
         }
 
         bottomNav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             if (id == R.id.nav_history) {
-                isOnBrowserTab = false;
-                updateCenterButton();
-                loadFragment(new HistoryFragment());
+                switchFragment(new HistoryFragment(), TAG_HISTORY);
+                updateCenterButton(false);
                 return true;
             } else if (id == R.id.nav_download) {
                 handleCenterButtonClick();
                 return true;
             } else if (id == R.id.nav_settings) {
-                isOnBrowserTab = false;
-                updateCenterButton();
-                loadFragment(new SettingsFragment());
+                switchFragment(new SettingsFragment(), TAG_SETTINGS);
+                updateCenterButton(false);
                 return true;
             }
             return false;
         });
 
-        getSupportFragmentManager().registerFragmentLifecycleCallbacks(
-                new FragmentManager.FragmentLifecycleCallbacks() {
-                    @Override
-                    public void onFragmentResumed(FragmentManager fm, Fragment f) {
-                        if (f instanceof BrowserFragment) {
-                            isOnBrowserTab = true;
-                        } else {
-                            isOnBrowserTab = false;
-                        }
-                        updateCenterButton();
-                    }
-                }, true);
-
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
-                if (currentFragment instanceof BrowserFragment) {
-                    BrowserFragment browser = (BrowserFragment) currentFragment;
+                FragmentManager fm = getSupportFragmentManager();
+                Fragment current = fm.findFragmentById(R.id.fragment_container);
+
+                if (current instanceof BrowserFragment) {
+                    BrowserFragment browser = (BrowserFragment) current;
                     if (browser.canGoBack()) {
                         browser.goBack();
                         return;
                     }
+                } else {
+                    showBrowserFragment();
+                    return;
                 }
+
                 setEnabled(false);
                 getOnBackPressedDispatcher().onBackPressed();
             }
@@ -124,37 +124,69 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         checkPermissions();
     }
 
+    private void switchFragment(Fragment newFragment, String tag) {
+        FragmentManager fm = getSupportFragmentManager();
+        FragmentTransaction ft = fm.beginTransaction();
+
+        Fragment current = fm.findFragmentById(R.id.fragment_container);
+        if (current != null) {
+            ft.hide(current);
+        }
+
+        Fragment existing = fm.findFragmentByTag(tag);
+        if (existing != null) {
+            ft.show(existing);
+        } else {
+            ft.add(R.id.fragment_container, newFragment, tag);
+        }
+
+        ft.commit();
+    }
+
+    private void showBrowserFragment() {
+        if (browserFragment == null) return;
+
+        FragmentManager fm = getSupportFragmentManager();
+        FragmentTransaction ft = fm.beginTransaction();
+
+        Fragment current = fm.findFragmentById(R.id.fragment_container);
+        if (current != null && current != browserFragment) {
+            ft.hide(current);
+        }
+
+        ft.show(browserFragment);
+        ft.commit();
+
+        bottomNav.getMenu().findItem(R.id.nav_download).setChecked(true);
+        updateCenterButton(true);
+    }
+
     private void handleCenterButtonClick() {
-        if (isOnBrowserTab) {
+        FragmentManager fm = getSupportFragmentManager();
+        Fragment current = fm.findFragmentById(R.id.fragment_container);
+
+        if (current instanceof BrowserFragment) {
             triggerDownload();
         } else {
-            isOnBrowserTab = true;
-            bottomNav.getMenu().findItem(R.id.nav_download).setChecked(true);
-            loadFragment(new BrowserFragment());
+            showBrowserFragment();
         }
     }
 
-    private void updateCenterButton() {
+    private void updateCenterButton(boolean onBrowser) {
         if (bottomNav == null) return;
 
-        if (isOnBrowserTab) {
-            if (!currentCenterIcon.equals("download")) {
-                bottomNav.getMenu().findItem(R.id.nav_download)
-                        .setIcon(R.drawable.ic_download_white);
-                currentCenterIcon = "download";
-                bottomNav.getMenu().findItem(R.id.nav_download).setTitle(R.string.nav_download);
-                if (detectedVideoId != null && !detectedVideoId.isEmpty()) {
-                    setNavDownloadActive(true);
-                }
+        if (onBrowser) {
+            bottomNav.getMenu().findItem(R.id.nav_download)
+                    .setIcon(R.drawable.ic_download_white);
+            bottomNav.getMenu().findItem(R.id.nav_download).setTitle(R.string.nav_download);
+            if (detectedVideoId != null && !detectedVideoId.isEmpty()) {
+                setNavDownloadActive(true);
             }
         } else {
-            if (!currentCenterIcon.equals("browser")) {
-                cancelNavPulse();
-                bottomNav.getMenu().findItem(R.id.nav_download)
-                        .setIcon(R.drawable.ic_browser);
-                currentCenterIcon = "browser";
-                bottomNav.getMenu().findItem(R.id.nav_download).setTitle(R.string.nav_browser);
-            }
+            cancelNavPulse();
+            bottomNav.getMenu().findItem(R.id.nav_download)
+                    .setIcon(R.drawable.ic_browser);
+            bottomNav.getMenu().findItem(R.id.nav_download).setTitle(R.string.nav_browser);
         }
     }
 
@@ -171,7 +203,10 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         if (webAppInterface != null) {
             String title = "redgifs_" + detectedVideoId;
             webAppInterface.downloadVideo(detectedVideoId, title);
-            playDownloadGlow();
+            SharedPreferences prefs = getSharedPreferences("redgifs_prefs", 0);
+            if (prefs.getBoolean("show_fab", false)) {
+                playDownloadGlow();
+            }
         } else {
             Toast.makeText(this, getString(R.string.download_failed_generic), Toast.LENGTH_SHORT).show();
         }
@@ -201,7 +236,10 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     @Override
     public void onVideoDetected(String videoId) {
         detectedVideoId = videoId;
-        if (isOnBrowserTab) {
+
+        FragmentManager fm = getSupportFragmentManager();
+        Fragment current = fm.findFragmentById(R.id.fragment_container);
+        if (current instanceof BrowserFragment) {
             setNavDownloadActive(true);
         }
     }
@@ -213,7 +251,11 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
     }
 
     private void setNavDownloadActive(boolean active) {
-        if (bottomNav == null || !isOnBrowserTab) return;
+        if (bottomNav == null) return;
+
+        FragmentManager fm = getSupportFragmentManager();
+        Fragment current = fm.findFragmentById(R.id.fragment_container);
+        if (!(current instanceof BrowserFragment)) return;
 
         View downloadView = bottomNav.findViewById(R.id.nav_download);
         if (downloadView == null) return;
@@ -259,13 +301,6 @@ public class MainActivity extends AppCompatActivity implements WebAppInterface.V
         } else {
             onVideoLost();
         }
-    }
-
-    private void loadFragment(Fragment fragment) {
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.fragment_container, fragment)
-                .commit();
     }
 
     private void checkPermissions() {
